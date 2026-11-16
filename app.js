@@ -208,18 +208,40 @@ async function camLive(cfg) {
     for (const v of viewers.values()) {
       const pc = v.call && v.call.peerConnection;
       if (!pc) { out.push(v.name + ':nocall'); continue; }
-      let s = '';
+      let s = '', frames = null;
       try {
-        (await pc.getStats()).forEach(r => {
-          if (r.type === 'outbound-rtp' && (r.kind || r.mediaType) === 'video')
-            s = `${r.framesEncoded ?? '?'}f/${Math.round((r.bytesSent || 0) / 1024)}k`;
+        const st = await pc.getStats();
+        st.forEach(r => {
+          if (r.type === 'outbound-rtp' && (r.kind || r.mediaType) === 'video') {
+            frames = r.framesEncoded ?? null;
+            const codec = r.codecId && st.get(r.codecId) ? st.get(r.codecId).mimeType.replace('video/', '') : '?';
+            s = `${r.framesEncoded ?? '?'}f/${Math.round((r.bytesSent || 0) / 1024)}k ${codec} ${r.frameWidth || 0}x${r.frameHeight || 0} ${r.qualityLimitationReason || ''}`;
+          }
         });
       } catch {}
+      // watchdog: old iPads can fail to encode big frames and send nothing; step the camera down
+      if (frames === 0 && /connected/.test(pc.connectionState || pc.iceConnectionState)) {
+        v.zero = (v.zero || 0) + 1;
+        if (v.zero === 4 && !stepping) stepDown();
+      } else if (frames > 0) v.zero = 0;
       const snd = pc.getSenders().map(x => x.track ? x.track.kind[0] + x.track.readyState[0] : '-').join('');
       out.push(`${v.name}:${s || 'nostat'} tx:${snd} ${pc.connectionState || pc.iceConnectionState}`);
     }
-    $('#camDiag').textContent = `cam:${vt ? vt.readyState + (vt.muted ? 'M' : '') : 'none'} ${preview.videoWidth}x${preview.videoHeight} | ${out.join(' | ')}`;
+    $('#camDiag').textContent = `cam:${vt ? vt.readyState + (vt.muted ? 'M' : '') : 'none'} ${preview.videoWidth}x${preview.videoHeight} q${cfg.quality} | ${out.join(' | ')}`;
   }, 1500);
+
+  let stepping = false;
+  async function stepDown() {
+    const next = cfg.quality > 720 ? 720 : cfg.quality > 480 ? 480 : 0;
+    if (!next) return;
+    stepping = true;
+    console.warn('no frames encoded, camera down to', next);
+    cfg.quality = next;
+    store.set('camQuality', '720'); // next start uses the safe setting
+    for (const v of viewers.values()) v.zero = 0;
+    try { await swapVideo(); } catch (e) { console.warn(e); }
+    stepping = false;
+  }
 
   $('#camFlip').onclick = flip;
   $('#camShare').onclick = () => { $('#shareSlot').appendChild(document.querySelector('.share')); $('#shareModal').hidden = false; };
