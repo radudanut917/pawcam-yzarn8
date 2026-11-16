@@ -73,8 +73,17 @@
   <div id="camTalk" class="talkbanner" hidden></div>
   <div class="bottombar">
     <button id="camFlip" class="btn round" title="Schimbă camera">🔄</button>
+    <button id="camShare" class="btn round" title="Invită (QR)">🔗</button>
     <button id="camBlack" class="btn round" title="Ecran negru">🌙</button>
     <button id="camStop" class="btn round danger" title="Oprește">⏹</button>
+  </div>
+  <div id="shareModal" class="modal" hidden>
+    <div class="card">
+      <h1>Invită</h1>
+      <p class="muted small">Scanează codul cu telefonul. PIN-ul îl spui separat.</p>
+      <div id="shareSlot"></div>
+      <button id="shareClose" class="btn primary">Închide</button>
+    </div>
   </div>
   <div id="blackout" class="blackout" hidden><span>Atinge de 2 ori pentru a reveni</span></div>
 </section>

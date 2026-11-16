@@ -202,6 +202,8 @@ async function camLive(cfg) {
   }
 
   $('#camFlip').onclick = flip;
+  $('#camShare').onclick = () => { $('#shareSlot').appendChild(document.querySelector('.share')); $('#shareModal').hidden = false; };
+  $('#shareClose').onclick = () => { $('#shareModal').hidden = true; };
   $('#camBlack').onclick = () => { $('#blackout').hidden = false; };
   $('#blackout').ondblclick = () => { $('#blackout').hidden = true; };
   let lastTap = 0;
