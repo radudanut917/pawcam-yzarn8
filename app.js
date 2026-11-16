@@ -63,8 +63,8 @@ async function camLive(cfg) {
   const audio = cfg.testMode ? testAudio() : (await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true },
   })).getAudioTracks()[0];
+  stream.addTrack(await getVideo()); // video first: viewers get it in the first track event
   stream.addTrack(audio);
-  stream.addTrack(await getVideo());
   show('camLive');
   const preview = $('#camPreview');
   preview.srcObject = stream;
@@ -264,6 +264,13 @@ function viewLive(camId, name, pin) {
   let peer = null, conn = null, call = null, joined = false, retryT = 0, myId = null, talkState = { talkerId: null, talker: null };
   let userMuted = false;
 
+  // status shows the picture size, so "no picture" is visible at a glance
+  function liveText() {
+    if (!joined) return;
+    pill(statusEl, 'on', video.videoWidth ? `Live ${video.videoWidth}×${video.videoHeight}` : 'Live (fără imagine încă)');
+  }
+  video.addEventListener('resize', liveText);
+  video.addEventListener('loadedmetadata', liveText);
   function setOffline(text) { offline.classList.remove('gone'); $('#offlineText').textContent = text; }
   function retry(text, ms = 4000) {
     joined = false;
@@ -287,17 +294,23 @@ function viewLive(camId, name, pin) {
       try { call && call.close(); } catch {}
       call = c;
       c.answer(silent);
-      c.on('stream', s => {
-        if (video.srcObject === s) return; // PeerJS can fire once per track
-        video.srcObject = s;
-        video.muted = userMuted;
-        video.play().then(() => { $('#tapSound').hidden = true; }).catch(() => {
-          video.muted = true; video.play().catch(() => {});
-          if (!userMuted) $('#tapSound').hidden = false;
-        });
-        offline.classList.add('gone');
-        pill(statusEl, 'on', 'Live');
-      });
+      // Safari won't show a video track added to a stream it is already playing,
+      // so hand the element a fresh MediaStream every time the track set changes.
+      let attachT = 0;
+      const attach = s => {
+        clearTimeout(attachT);
+        attachT = setTimeout(() => {
+          video.srcObject = new MediaStream(s.getTracks());
+          video.muted = userMuted;
+          video.play().then(() => { $('#tapSound').hidden = true; }).catch(() => {
+            video.muted = true; video.play().catch(() => {});
+            if (!userMuted) $('#tapSound').hidden = false;
+          });
+          offline.classList.add('gone');
+          liveText();
+        }, 150);
+      };
+      c.on('stream', s => { attach(s); s.onaddtrack = () => attach(s); });
       c.on('close', () => { if (call === c) retry('Legătura s-a pierdut. Reîncerc…', 1500); });
     });
   }
