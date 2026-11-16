@@ -14,13 +14,24 @@ const show = id => document.querySelectorAll('.screen').forEach(s => s.hidden = 
 function pill(el, state, text) { el.classList.toggle('on', state === 'on'); el.classList.toggle('off', state === 'off'); el.querySelector('b').textContent = text; }
 const params = () => new URLSearchParams(location.hash.slice(1));
 
+// TURN relay (needed on 4G / CGNAT). Lives on the iPad and in the secret link, never in the repo.
+const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64d = s => { try { return JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))))); } catch { return null; } };
+function peerOpts(turn) {
+  if (!turn || !turn.u) return { debug: 1 }; // PeerJS defaults
+  return { debug: 1, config: { iceServers: [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+    { urls: turn.u.split(/[\s,]+/).filter(Boolean), username: turn.n, credential: turn.p },
+  ] } };
+}
+
 window.addEventListener('hashchange', () => location.reload());
 route();
 
 function route() {
   const p = params();
   if (p.has('cam')) return camSetup(p.has('test'));
-  if (p.get('c')) return viewJoin(p.get('c'));
+  if (p.get('c')) return viewJoin(p.get('c'), p.get('t'));
   show('home');
   const saved = store.get('lastCam', null);
   if (saved) $('#homeSaved').innerHTML = `<a class="btn" href="#c=${encodeURIComponent(saved)}">🐶 Deschide ultima cameră</a>`;
@@ -36,9 +47,20 @@ function camSetup(testMode) {
   facingEl.value = store.get('camFacing', 'environment');
   qualEl.value = store.get('camQuality', '720');
 
-  const link = `${location.origin}${location.pathname}#c=${camId}`;
-  $('#shareLink').value = link;
-  try { const q = qrcode(0, 'M'); q.addData(link); q.make(); $('#qr').innerHTML = q.createImgTag(6, 0); } catch {}
+  const turnU = $('#turnUrl'), turnN = $('#turnUser'), turnP = $('#turnPass');
+  const t0 = store.get('turn', null) || {};
+  turnU.value = t0.u || ''; turnN.value = t0.n || ''; turnP.value = t0.p || '';
+  const readTurn = () => ({ u: turnU.value.trim(), n: turnN.value.trim(), p: turnP.value.trim() });
+  let link = '';
+  function makeLink() {
+    const t = readTurn();
+    store.set('turn', t.u ? t : null);
+    link = `${location.origin}${location.pathname}#c=${camId}` + (t.u ? '&t=' + b64e(t) : '');
+    $('#shareLink').value = link;
+    try { const q = qrcode(0, 'L'); q.addData(link); q.make(); $('#qr').innerHTML = q.createImgTag(4, 0); } catch {}
+  }
+  makeLink();
+  [turnU, turnN, turnP].forEach(el => el.addEventListener('change', makeLink));
   $('#copyLink').onclick = async () => {
     try { await navigator.clipboard.writeText(link); $('#copyLink').textContent = 'Copiat ✓'; }
     catch { $('#shareLink').select(); document.execCommand('copy'); }
@@ -52,7 +74,8 @@ function camSetup(testMode) {
     if (!/^\d{4,8}$/.test(pin)) { $('#camSetupErr').textContent = 'PIN-ul trebuie să aibă 4–8 cifre.'; return; }
     store.set('camPin', pin); store.set('camFacing', facingEl.value); store.set('camQuality', qualEl.value);
     started = true;
-    camLive({ camId, pin, facing: facingEl.value, quality: +qualEl.value, testMode })
+    makeLink();
+    camLive({ camId, pin, facing: facingEl.value, quality: +qualEl.value, testMode, turn: store.get('turn', null) })
       .catch(e => { started = false; show('camSetup'); $('#camSetupErr').textContent = 'Nu pot porni camera: ' + (e.message || e.name || e); });
   };
 }
@@ -97,7 +120,7 @@ async function camLive(cfg) {
   function startPeer() {
     if (stopped) return;
     pill(statusEl, '', 'Conectare…');
-    const p = peer = new Peer(PREFIX + cfg.camId, { debug: 1 });
+    const p = peer = new Peer(PREFIX + cfg.camId, peerOpts(cfg.turn));
     p.on('open', () => { if (p === peer) pill(statusEl, 'on', 'Online'); });
     p.on('connection', handleViewer);
     p.on('disconnected', () => {
@@ -279,7 +302,9 @@ function testAudio() {
 }
 
 /* ============================== VIEWER ============================== */
-function viewJoin(camId) {
+function viewJoin(camId, tRaw) {
+  let turn = tRaw ? b64d(tRaw) : null;
+  if (turn) store.set('turn_' + camId, turn); else turn = store.get('turn_' + camId, null);
   show('viewJoin');
   const known = store.get('pins', {});
   $('#viewName').value = store.get('name', '');
@@ -290,11 +315,11 @@ function viewJoin(camId) {
     if (!name) { $('#viewJoinErr').textContent = 'Scrie-ți numele.'; return; }
     if (!/^\d{4,8}$/.test(pin)) { $('#viewJoinErr').textContent = 'PIN-ul are 4–8 cifre.'; return; }
     store.set('name', name);
-    viewLive(camId, name, pin);
+    viewLive(camId, name, pin, turn);
   };
 }
 
-function viewLive(camId, name, pin) {
+function viewLive(camId, name, pin, turn) {
   show('viewLive');
   store.set('lastCam', camId);
   // made inside the tap, so iOS lets us use audio
@@ -323,7 +348,7 @@ function viewLive(camId, name, pin) {
   }
 
   function startPeer() {
-    peer = new Peer({ debug: 1 });
+    peer = new Peer(peerOpts(turn));
     peer.on('open', id => { myId = id; connect(); });
     peer.on('disconnected', () => setTimeout(() => { if (!peer.destroyed) peer.reconnect(); }, 2000));
     peer.on('error', e => {
@@ -455,6 +480,16 @@ function viewLive(camId, name, pin) {
         });
       } catch {}
       inb += ` pc:${pc.connectionState || pc.iceConnectionState}`;
+      try {
+        const st = await pc.getStats();
+        st.forEach(r => {
+          if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') {
+            const l = st.get(r.localCandidateId), rm = st.get(r.remoteCandidateId);
+            inb += ` via:${l ? l.candidateType : '?'}/${rm ? rm.candidateType : '?'}`;
+          }
+        });
+      } catch {}
+      inb += turn && turn.u ? ' turn:on' : ' turn:off';
       inb += ' rx:' + pc.getReceivers().map(r => r.track ? r.track.kind[0] + r.track.readyState[0] : '-').join('');
     }
     $('#diag').textContent = `v:${video.readyState}${video.paused ? 'P' : '>'} ${video.videoWidth}x${video.videoHeight} tr:${tr} ${inb}`;
