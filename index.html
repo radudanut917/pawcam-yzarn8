@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Doggo Cam">
+<meta name="theme-color" content="#0d0f14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Doggo Cam</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HOME -->
+<section id="home" class="screen card-screen" hidden>
+  <div class="card">
+    <div class="logo">🐶</div>
+    <h1>Doggo Cam</h1>
+    <p class="muted">Camera live pentru cățel. Video, sunet, vorbit înapoi.</p>
+    <a class="btn primary" href="#cam">📷 Acest dispozitiv e camera</a>
+    <div id="homeSaved"></div>
+    <p class="muted small">Pentru a privi, deschide link-ul primit de la cameră.</p>
+  </div>
+</section>
+
+<!-- CAMERA SETUP -->
+<section id="camSetup" class="screen card-screen" hidden>
+  <div class="card">
+    <div class="logo">📷</div>
+    <h1>Camera</h1>
+    <label>PIN (4–8 cifre, îl dai celor care privesc)
+      <input id="camPin" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off">
+    </label>
+    <div class="row">
+      <label>Obiectiv
+        <select id="camFacing">
+          <option value="environment">Spate</option>
+          <option value="user">Față</option>
+        </select>
+      </label>
+      <label>Calitate
+        <select id="camQuality">
+          <option value="720">720p</option>
+          <option value="1080">1080p</option>
+        </select>
+      </label>
+    </div>
+    <button id="camStart" class="btn primary">▶ Pornește camera</button>
+    <p id="camSetupErr" class="err"></p>
+    <details>
+      <summary>Invită (link + QR)</summary>
+      <div class="share">
+        <div id="qr" class="qr"></div>
+        <input id="shareLink" readonly>
+        <button id="copyLink" class="btn">Copiază link-ul</button>
+        <button id="newLink" class="btn danger">Link nou (cel vechi nu mai merge)</button>
+      </div>
+    </details>
+    <p class="muted small">Pe iPad: Setări → Ecran și luminozitate → Blocare automată → Niciodată. Ține-l la încărcător.</p>
+  </div>
+</section>
+
+<!-- CAMERA LIVE -->
+<section id="camLive" class="screen" hidden>
+  <video id="camPreview" playsinline autoplay muted></video>
+  <div class="topbar">
+    <span id="camStatus" class="pill"><i class="dot"></i><b>Conectare…</b></span>
+    <span id="camViewers" class="pill">👀 0</span>
+  </div>
+  <div id="camTalk" class="talkbanner" hidden></div>
+  <div class="bottombar">
+    <button id="camFlip" class="btn round" title="Schimbă camera">🔄</button>
+    <button id="camBlack" class="btn round" title="Ecran negru">🌙</button>
+    <button id="camStop" class="btn round danger" title="Oprește">⏹</button>
+  </div>
+  <div id="blackout" class="blackout" hidden><span>Atinge de 2 ori pentru a reveni</span></div>
+</section>
+
+<!-- VIEWER JOIN -->
+<section id="viewJoin" class="screen card-screen" hidden>
+  <div class="card">
+    <div class="logo">🐶</div>
+    <h1>Doggo Cam</h1>
+    <label>Numele tău
+      <input id="viewName" maxlength="20" autocomplete="nickname">
+    </label>
+    <label id="viewPinWrap">PIN
+      <input id="viewPin" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off">
+    </label>
+    <button id="viewJoinBtn" class="btn primary">Intră</button>
+    <p id="viewJoinErr" class="err"></p>
+  </div>
+</section>
+
+<!-- VIEWER LIVE -->
+<section id="viewLive" class="screen" hidden>
+  <div id="stage" class="stage">
+    <video id="remote" playsinline autoplay></video>
+  </div>
+  <div id="offline" class="offline"><div class="spinner"></div><b id="offlineText">Caut camera…</b></div>
+  <div class="topbar">
+    <span id="viewStatus" class="pill"><i class="dot"></i><b>Conectare…</b></span>
+    <span id="viewViewers" class="pill">👀</span>
+    <span id="zoomLabel" class="pill" hidden>1.0×</span>
+  </div>
+  <div id="viewTalk" class="talkbanner" hidden></div>
+  <button id="tapSound" class="tapsound" hidden>🔇 Atinge pentru sunet</button>
+  <div class="bottombar">
+    <button id="zoomOut" class="btn round">−</button>
+    <button id="zoomReset" class="btn round">⟲</button>
+    <button id="zoomIn" class="btn round">+</button>
+    <button id="ptt" class="btn ptt">🎙 Ține apăsat ca să vorbești</button>
+    <button id="viewMute" class="btn round" title="Sunet">🔊</button>
+    <button id="viewFlip" class="btn round" title="Schimbă camera">🔄</button>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
