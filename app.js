@@ -201,6 +201,26 @@ async function camLive(cfg) {
     flipping = false;
   }
 
+  // temporary diagnostics line: is the iPad sending video?
+  setInterval(async () => {
+    const vt = stream.getVideoTracks()[0];
+    let out = [];
+    for (const v of viewers.values()) {
+      const pc = v.call && v.call.peerConnection;
+      if (!pc) { out.push(v.name + ':nocall'); continue; }
+      let s = '';
+      try {
+        (await pc.getStats()).forEach(r => {
+          if (r.type === 'outbound-rtp' && (r.kind || r.mediaType) === 'video')
+            s = `${r.framesEncoded ?? '?'}f/${Math.round((r.bytesSent || 0) / 1024)}k`;
+        });
+      } catch {}
+      const snd = pc.getSenders().map(x => x.track ? x.track.kind[0] + x.track.readyState[0] : '-').join('');
+      out.push(`${v.name}:${s || 'nostat'} tx:${snd} ${pc.connectionState || pc.iceConnectionState}`);
+    }
+    $('#camDiag').textContent = `cam:${vt ? vt.readyState + (vt.muted ? 'M' : '') : 'none'} ${preview.videoWidth}x${preview.videoHeight} | ${out.join(' | ')}`;
+  }, 1500);
+
   $('#camFlip').onclick = flip;
   $('#camShare').onclick = () => { $('#shareSlot').appendChild(document.querySelector('.share')); $('#shareModal').hidden = false; };
   $('#shareClose').onclick = () => { $('#shareModal').hidden = true; };
@@ -399,6 +419,24 @@ function viewLive(camId, name, pin) {
   ptt.addEventListener('contextmenu', e => e.preventDefault());
 
   setupZoom(video, $('#stage'));
+
+  // temporary diagnostics line: where does the picture stop?
+  setInterval(async () => {
+    const pc = call && call.peerConnection;
+    const tr = video.srcObject ? video.srcObject.getTracks().map(t => `${t.kind[0]}:${t.readyState[0]}${t.muted ? 'M' : ''}${t.enabled ? '' : 'D'}`).join(',') : 'none';
+    let inb = '';
+    if (pc) {
+      try {
+        (await pc.getStats()).forEach(r => {
+          if (r.type === 'inbound-rtp' && (r.kind || r.mediaType) === 'video')
+            inb = `in:${r.framesDecoded ?? '?'}f/${Math.round((r.bytesReceived || 0) / 1024)}k`;
+        });
+      } catch {}
+      inb += ` pc:${pc.connectionState || pc.iceConnectionState}`;
+      inb += ' rx:' + pc.getReceivers().map(r => r.track ? r.track.kind[0] + r.track.readyState[0] : '-').join('');
+    }
+    $('#diag').textContent = `v:${video.readyState}${video.paused ? 'P' : '>'} ${video.videoWidth}x${video.videoHeight} tr:${tr} ${inb}`;
+  }, 1500);
 }
 
 /* ============================== ZOOM ============================== */
